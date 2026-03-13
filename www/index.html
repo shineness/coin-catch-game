@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>接金币</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            touch-action: none;
+        }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 500px;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            border-radius: 0;
+        }
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 10;
+        }
+        .hidden {
+            display: none !important;
+        }
+        h1 {
+            color: #ffd700;
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+        .score-display {
+            color: #fff;
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 15px 50px;
+            font-size: 1.2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        button:active {
+            transform: scale(0.95);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffd700;
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+        #highScore {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: #ff6b6b;
+            font-size: 1rem;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="scoreBoard">得分: 0</div>
+        <div id="highScore">最高: 0</div>
+        
+        <div id="startScreen">
+            <h1>接金币 🪙</h1>
+            <p class="score-display">滑动手指控制碗接住金币！</p>
+            <button onclick="startGame()">开始游戏</button>
+        </div>
+        
+        <div id="gameOverScreen" class="hidden">
+            <h1>游戏结束 🎮</h1>
+            <p class="score-display" id="finalScore">得分: 0</p>
+            <button onclick="startGame()">再来一次</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameRunning = false;
+        let score = 0;
+        let highScore = localStorage.getItem('coinCatchHighScore') || 0;
+        let coins = [];
+        let bucket = { x: 0, y: 0, width: 80, height: 50, speed: 0 };
+        let lastTouchX = null;
+        let animationId;
+        let difficulty = 1;
+        
+        // Set canvas size
+        function resizeCanvas() {
+            const container = document.getElementById('gameContainer');
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            bucket.y = canvas.height - 100;
+            bucket.x = canvas.width / 2 - bucket.width / 2;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        document.getElementById('highScore').textContent = `最高: ${highScore}`;
+        
+        // Touch/Mouse controls
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            lastTouchX = e.touches[0].clientX;
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!gameRunning) return;
+            const touchX = e.touches[0].clientX;
+            const deltaX = touchX - lastTouchX;
+            bucket.x += deltaX * 1.5;
+            lastTouchX = touchX;
+            
+            // Boundary check
+            if (bucket.x < 0) bucket.x = 0;
+            if (bucket.x + bucket.width > canvas.width) bucket.x = canvas.width - bucket.width;
+        });
+        
+        canvas.addEventListener('touchend', () => {
+            lastTouchX = null;
+        });
+        
+        canvas.addEventListener('mousedown', (e) => {
+            lastTouchX = e.clientX;
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameRunning || lastTouchX === null) return;
+            const mouseX = e.clientX;
+            const deltaX = mouseX - lastTouchX;
+            bucket.x += deltaX * 1.5;
+            lastTouchX = mouseX;
+            
+            if (bucket.x < 0) bucket.x = 0;
+            if (bucket.x + bucket.width > canvas.width) bucket.x = canvas.width - bucket.width;
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            lastTouchX = null;
+        });
+        
+        // Game functions
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            score = 0;
+            difficulty = 1;
+            coins = [];
+            updateScore();
+            gameRunning = true;
+            gameLoop();
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            cancelAnimationFrame(animationId);
+            
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('coinCatchHighScore', highScore);
+                document.getElementById('highScore').textContent = `最高: ${highScore}`;
+            }
+            
+            document.getElementById('finalScore').textContent = `得分: ${score}`;
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+        
+        function updateScore() {
+            document.getElementById('scoreBoard').textContent = `得分: ${score}`;
+        }
+        
+        function spawnCoin() {
+            const coin = {
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                size: 25 + Math.random() * 10,
+                speed: (2 + Math.random() * 2) * difficulty,
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.2,
+                value: Math.random() > 0.9 ? 10 : 1, // 10% chance for bonus coin
+                color: Math.random() > 0.9 ? '#ff6b6b' : '#ffd700'
+            };
+            coins.push(coin);
+        }
+        
+        function drawBucket() {
+            // Bucket body
+            ctx.fillStyle = '#8B4513';
+            ctx.beginPath();
+            ctx.moveTo(bucket.x, bucket.y);
+            ctx.lineTo(bucket.x + bucket.width, bucket.y);
+            ctx.lineTo(bucket.x + bucket.width - 10, bucket.y + bucket.height);
+            ctx.lineTo(bucket.x + 10, bucket.y + bucket.height);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Bucket rim
+            ctx.fillStyle = '#A0522D';
+            ctx.fillRect(bucket.x - 5, bucket.y, bucket.width + 10, 8);
+            
+            // Highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.fillRect(bucket.x + 10, bucket.y + 15, 15, bucket.height - 20);
+        }
+        
+        function drawCoin(coin) {
+            ctx.save();
+            ctx.translate(coin.x + coin.size/2, coin.y + coin.size/2);
+            ctx.rotate(coin.rotation);
+            
+            // Coin body
+            ctx.beginPath();
+            ctx.arc(0, 0, coin.size/2, 0, Math.PI * 2);
+            ctx.fillStyle = coin.color;
+            ctx.fill();
+            
+            // Coin shine
+            ctx.beginPath();
+            ctx.arc(-coin.size/6, -coin.size/6, coin.size/4, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.fill();
+            
+            // Dollar sign or number
+            ctx.fillStyle = coin.value > 1 ? '#fff' : '#000';
+            ctx.font = `bold ${coin.size/2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(coin.value > 1 ? '$' : '$', 0, 2);
+            
+            ctx.restore();
+        }
+        
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Spawn coins
+            if (Math.random() < 0.03 * difficulty) {
+                spawnCoin();
+            }
+            
+            // Increase difficulty
+            difficulty = 1 + score / 50;
+            
+            // Update and draw coins
+            for (let i = coins.length - 1; i >= 0; i--) {
+                const coin = coins[i];
+                coin.y += coin.speed;
+                coin.rotation += coin.rotationSpeed;
+                
+                drawCoin(coin);
+                
+                // Collision detection
+                if (coin.y + coin.size > bucket.y && 
+                    coin.y < bucket.y + bucket.height &&
+                    coin.x + coin.size > bucket.x && 
+                    coin.x < bucket.x + bucket.width) {
+                    score += coin.value;
+                    updateScore();
+                    coins.splice(i, 1);
+                    continue;
+                }
+                
+                // Remove if off screen
+                if (coin.y > canvas.height) {
+                    coins.splice(i, 1);
+                    // Lose condition - miss 3 coins
+                    if (coin.value === 1) {
+                        // Just remove, no penalty for simple version
+                    }
+                }
+            }
+            
+            drawBucket();
+            
+            animationId = requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>

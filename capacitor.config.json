@@ -1,0 +1,16 @@
+{
+  "appId": "com.coincatch.game",
+  "appName": "接金币",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "cordova": {
+    "preferences": {
+      "Orientation": "portrait",
+      "android-minSdkVersion": "22",
+      "android-targetSdkVersion": "33"
+    }
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

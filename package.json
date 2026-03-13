@@ -1,0 +1,23 @@
+{
+  "name": "coin-catch-game",
+  "version": "1.0.0",
+  "description": "接金币 - 一个有趣的休闲手机游戏",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve .",
+    "build:android": "npx cap sync android && npx cap open android",
+    "build:apk": "npx cap sync android && cd android && ./gradlew assembleRelease"
+  },
+  "keywords": [
+    "game",
+    "html5",
+    "mobile",
+    "coin-catch"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/cli": "^8.2.0"
+  }
+}
